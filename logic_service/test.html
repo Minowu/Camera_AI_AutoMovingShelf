@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>SSE Camera AI Monitor</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --primary-color: #2c3e50;
+            --success-color: #27ae60;
+            --error-color: #e74c3c;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-color); color: var(--primary-color); padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        
+        /* Trạng thái kết nối */
+        .status-bar { padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .status-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .online { background-color: var(--success-color); }
+        .offline { background-color: var(--error-color); }
+        .connecting { background-color: #f39c12; animation: blink 1s infinite; }
+
+        /* Bảng hiển thị Log */
+        #data-log { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; height: 500px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 14px; line-height: 1.5; }
+        .log-item { border-bottom: 1px solid #333; padding: 5px 0; }
+        .log-time { color: #569cd6; }
+        .log-event { color: #ce9178; font-weight: bold; }
+        
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📡 Hệ thống Giám sát Real-time</h2>
+
+    <div class="status-bar">
+        <div>
+            <span id="status-icon" class="status-dot offline"></span>
+            <span id="status-text">Đang ngắt kết nối</span>
+        </div>
+        <div>
+            <strong>Group ID:</strong> <span id="display-group">-</span>
+        </div>
+    </div>
+
+    <div id="data-log">
+        <div class="log-item">Hệ thống sẵn sàng. Đang chờ dữ liệu...</div>
+    </div>
+</div>
+
+<script>
+    // --- CẤU HÌNH ---
+    const GROUP_ID = 1; // Thay đổi ID group bạn muốn lắng nghe
+    const SERVER_URL = `http://127.0.0.1:9998/sse/monitor?group_id=${GROUP_ID}`;
+
+    const logContainer = document.getElementById('data-log');
+    const statusIcon = document.getElementById('status-icon');
+    const statusText = document.getElementById('status-text');
+    document.getElementById('display-group').innerText = GROUP_ID;
+
+    let eventSource = null;
+
+    function connectSSE() {
+        if (eventSource) eventSource.close();
+
+        // Khởi tạo kết nối SSE
+        eventSource = new EventSource(SERVER_URL);
+
+        // 1. Khi mở kết nối thành công
+        eventSource.onopen = () => {
+            statusIcon.className = 'status-dot online';
+            statusText.innerText = 'Đang trực tuyến (Online)';
+            addLog("System", "Kết nối thành công đến Server.");
+        };
+
+        // 2. Lắng nghe tin nhắn mặc định (không có nhãn event)
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            addLog("Message", data);
+        };
+
+        // 3. Lắng nghe tin nhắn có nhãn event cụ thể (Ví dụ: 'robot_update')
+        // Tương ứng với backend gửi: f"event: robot_update\ndata: ...\n\n"
+        eventSource.addEventListener('robot_update', (event) => {
+            const data = JSON.parse(event.data);
+            addLog("Robot", data);
+        });
+
+        // 4. Lắng nghe cảnh báo lỗi (Ví dụ: 'alarm')
+        eventSource.addEventListener('alarm', (event) => {
+            const data = JSON.parse(event.data);
+            addLog("🚨 ALARM", data);
+        });
+
+        // 5. Khi có lỗi kết nối
+        eventSource.onerror = (err) => {
+            statusIcon.className = 'status-dot connecting';
+            statusText.innerText = 'Mất kết nối. Đang thử lại...';
+            // EventSource sẽ tự động kết nối lại, chúng ta không cần làm gì thêm
+        };
+    }
+
+    function addLog(type, content) {
+        const time = new Date().toLocaleTimeString();
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        
+        const contentStr = typeof content === 'object' ? JSON.stringify(content) : content;
+        
+        item.innerHTML = `
+            <span class="log-time">[${time}]</span> 
+            <span class="log-event">${type.toUpperCase()}:</span> 
+            <span>${contentStr}</span>
+        `;
+        
+        logContainer.prepend(item); // Đưa tin mới nhất lên đầu
+    }
+
+    // Chạy kết nối
+    connectSSE();
+
+    // Đóng kết nối khi tắt trình duyệt
+    window.onbeforeunload = () => {
+        if (eventSource) eventSource.close();
+    };
+</script>
+
+</body>
+</html>
