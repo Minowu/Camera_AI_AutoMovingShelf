@@ -1,0 +1,453 @@
+{
+    "10000630": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000630",
+            "10000056"
+        ]
+    },
+    "10000607": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000607",
+            "10000053"
+        ]
+    },
+    "10000629": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000629",
+            "10000084"
+        ]
+    },
+    "10000624": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2.1,
+        "matching":
+        [
+            "10000624",
+            "10000086",
+            "10000088",
+            "10000090"
+        ]
+    },
+    "10000628": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000628",
+            "10000092"
+        ]
+    },
+    "10000626": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000626",
+            "10000094"
+        ]
+    },
+    "10000625": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000625",
+            "10000096"
+        ]
+    },
+    "10000623": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000623",
+            "10001523"
+        ]
+    },
+    "10000610": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2.1,
+        "matching":
+        [
+            "10000610",
+            "10001526",
+            "10001521"
+        ]
+    },
+    "10000055": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000055",
+            "10000670"
+        ]
+    },
+    "10000078": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000078",
+            "10000670"
+        ]
+    },
+    "10000080": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000080",
+            "10000670"
+        ]
+    },
+    "10000082": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000082",
+            "10000670"
+        ]
+    },
+    "10000098": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000098",
+            "10000670"
+        ]
+    },
+    "10000100": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000100",
+            "10000670"
+        ]
+    },
+    "10000102": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000102",
+            "10000670"
+        ]
+    },
+    "10000675": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000675",
+            "10000010"
+        ]
+    },
+    "10000618": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000618",
+            "10000012"
+        ]
+    },
+    "10000676": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000676",
+            "10000014"
+        ]
+    },
+    "10000627": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2.1,
+        "matching":
+        [
+            "10000627",
+            "10000026",
+            "10000028",
+            "10000032"
+        ]
+    },
+    "10000674": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000674",
+            "10000034"
+        ]
+    },
+    "10003137": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10003137",
+            "10000036"
+        ]
+    },
+    "10000617": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000617",
+            "10000038"
+        ]
+    },
+    "10000612": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2.1,
+        "matching":
+        [
+            "10000612",
+            "10000042",
+            "10000044"
+        ]
+    },
+    "10000016": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000016",
+            "10000671"
+        ]
+    },
+    "10000018": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000018",
+            "10000671"
+        ]
+    },
+    "10000020": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000020",
+            "10000671"
+        ]
+    },
+    "10000022": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000022",
+            "10000671"
+        ]
+    },
+    "10000024": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000024",
+            "10000671"
+        ]
+    },
+    "10000030": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000030",
+            "10000671"
+        ]
+    },
+    "10000046": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000046",
+            "10000671"
+        ]
+    },
+    "10000048": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000046",
+            "10000671"
+        ]
+    },
+    "10000050": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10000046",
+            "10000671"
+        ]
+    },
+    "10000614": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000614",
+            "10003694"
+        ]
+    },
+    "10000616": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000616",
+            "10003690"
+        ]
+    },
+    "10000622": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000622",
+            "10003685"
+        ]
+    },
+    "10000620": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000620",
+            "10003686"
+        ]
+    },
+    "10000619": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000619",
+            "10003681"
+        ]
+    },
+    "10000633": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000633",
+            "10003259"
+        ]
+    },
+    "10000632": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000632",
+            "10003260"
+        ]
+    },
+    "10000631": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000631",
+            "10003682"
+        ]
+    },
+    "10000621": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 2,
+        "matching":
+        [
+            "10000621",
+            "10003689"
+        ]
+    },
+    "40000449": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "40000449",
+            "10000671"
+        ]
+    },
+    "40000450": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "40000450",
+            "10000671"
+        ]
+    },
+    "40000451": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "40000451",
+            "10000671"
+        ]
+    },
+    "10003693": {
+        "logic_path": "DCC_AE3_AE4",
+        "zone": "Zone_KD_2",
+        "logic_type": 2.2,
+        "matching":
+        [
+            "10003693",
+            "10000671"
+        ]
+    },
+    "10000608": {
+        "logic_path": "DCC_AE3_AE4",
+        "logic_type": 1,
+        "matching":
+        [
+            "10000608",
+            "10003694",
+            "10003254",
+            "10000670"
+        ]
+    }
+}
