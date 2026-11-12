@@ -29,8 +29,6 @@ class Position_Manager:
 
     async def start(self) -> None:
         self.load_configs()
-        if self._consumer_task is None:
-            self._consumer_task = asyncio.create_task(self._consumer_loop())
 
     def load_configs(self):
         config_dir = "config/map_config"
@@ -203,21 +201,31 @@ class Position_Manager:
 
     async def block_point(self, point):
         points = point if isinstance(point, list) else [point]
-        
+        now = time.time()
         for p in points:
-            pos_data = self._position_state.get(p)
-            if pos_data:
+            p = str(p)
+            self._failed_points.discard(p)
+            self._pending_state.pop(p, None)
+            if p in self._position_state:
                 self._position_state[p]["label"] = "block"
+                self._position_state[p]["ts"] = now
+            else:
+                self._position_state[p] = {"label": "block", "group_id": 1, "ts": now}
         blocked_list = [k for k, v in self._position_state.items() if v.get("label") == "block"]
         logger.info(f"🔒 [BLOCK] Đã khóa ô: {points} | Các ô đang block: {blocked_list}")
 
     async def un_block_point(self, point):
         points = point if isinstance(point, list) else [point]
-        
+        now = time.time()
         for p in points:
-            pos_data = self._position_state.get(p)
-            if pos_data:
+            p = str(p)
+            self._failed_points.discard(p)
+            self._pending_state.pop(p, None)
+            if p in self._position_state:
                 self._position_state[p]["label"] = "None"
+                self._position_state[p]["ts"] = now
+            else:
+                self._position_state[p] = {"label": "None", "group_id": 1, "ts": now}
         blocked_list = [k for k, v in self._position_state.items() if v.get("label") == "block"]
         logger.info(f"🔓 [UNBLOCK] Đã mở khóa ô: {points} | Các ô đang block còn lại: {blocked_list}")
 
@@ -249,22 +257,5 @@ class Position_Manager:
                 await self.execute_logic(data, 2)
             except Exception as e:
                 logger.warning(f"Error: {e}")
-
-    async def _consumer_loop(self) -> None:
-        while True:
-            try:
-                now = time.time()
-                # Dọn dẹp dữ liệu cũ (> 10 phút)
-                keys_to_del = [k for k, v in self._position_state.items() 
-                               if now - v.get('ts', 0) > 600]
-                for k in keys_to_del:
-                    del self._position_state[k]
-                
-                await asyncio.sleep(60) 
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in manager loop: {e}")
-                await asyncio.sleep(1)
 
 pos_manager = Position_Manager(settings.time_recognition)
