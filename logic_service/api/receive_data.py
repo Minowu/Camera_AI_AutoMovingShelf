@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 import time
+import asyncio
 from shared.logger import get_logger
 from fastapi import APIRouter, Request
 from services.POS_manager import pos_manager
@@ -36,9 +37,9 @@ async def active_proc(request: Request):
 async def receive_task_status(request: Request):
     payload = await request.json()
     logger.info(f"📥 [NHẬN TASK STATUS] orderId={payload.get('orderId')} | status={payload.get('status')} | subTaskSeq={payload.get('subTaskSeq')} | subTaskStatus={payload.get('subTaskStatus')}")
-    data = await task_service.unlock_task(payload)
+    asyncio.create_task(task_service.unlock_task(payload))
 
-    return {"status": "success", "data": data}
+    return {"status": "success", "data": None}
 
 @router.post("/robot-zone")
 async def receive_task_status(request: Request):
