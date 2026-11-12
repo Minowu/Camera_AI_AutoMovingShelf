@@ -24,6 +24,8 @@ class Position_Manager:
         self._registry = {}
         self._last_check_time = {}
         self.time_recognition = time_recognition
+        self._failed_points = set()
+        self._dispatching = set()
 
     async def start(self) -> None:
         self.load_configs()
@@ -64,6 +66,10 @@ class Position_Manager:
                 await self._consumer_task
             self._consumer_task = None
 
+    async def mark_failed(self, pos_id):
+        self._failed_points.add(pos_id)
+        logger.error(f"[POS_manager] Điểm {pos_id} bị đánh dấu thất bại (failed), tạm dừng dispatch")
+
     async def update_state(self, data) -> None:
         now = time.time()
 
@@ -82,10 +88,9 @@ class Position_Manager:
                 # Kiểm tra có trong config thì thực hiện gửi đến đúng logic
                 file_name = self.mapping.get(pos_id)
                 if file_name and new_label == "hang":
-                    try:
-                        await self.request_service_auto(self.data_configs[file_name][pos_id])
-                    except Exception as e:
-                        logger.warning(f"Error: {e}")
+                    if pos_id not in self._failed_points and pos_id not in self._dispatching:
+                        self._dispatching.add(pos_id)
+                        asyncio.create_task(self.request_service_auto(self.data_configs[file_name][pos_id], pos_id))
                 continue
 
             pending = self._pending_state.get(pos_id)
@@ -107,8 +112,14 @@ class Position_Manager:
                     "start_ts": now
                 }
 
-    async def request_service_auto(self, data):
-        await self.execute_logic(data, 0)
+    async def request_service_auto(self, data, pos_id=None):
+        try:
+            await self.execute_logic(data, 0)
+        except Exception as e:
+            logger.warning(f"Error: {e}")
+        finally:
+            if pos_id is not None:
+                self._dispatching.discard(pos_id)
 
     async def execute_logic(self, data, mode):
         try:
