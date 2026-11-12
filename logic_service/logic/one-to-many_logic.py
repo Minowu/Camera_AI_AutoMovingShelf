@@ -14,6 +14,7 @@ from shared.logger import get_logger
 from services.POS_manager import pos_manager
 from services.Task_manager import task_service
 from core.config import settings
+import asyncio
 import json
 import time
 import uuid
@@ -21,6 +22,8 @@ import httpx
 
 logger = get_logger("logic_service")
 ics_url = f"http://{settings.ics_host}:7000"
+MAX_RETRIES = 3
+RCS_HEADERS = {"Accept-Language": "en-US"}
 
 # Lưu chỉ số xoay vòng (Round-Robin pointer) trong RAM cho từng ô nguồn
 _last_dest_index = {}
@@ -78,28 +81,53 @@ async def process_auto(data: dict) -> None:
     }
 
     # 5. Ghi tracking và gửi sang RCS (CHỈ KHÓA Ô NGUỒN)
-    try:
-        # Ghi tracking chỉ riêng điểm source
-        await task_service.track_for_task(order_id, {"position": source})
+    # Ghi tracking chỉ riêng điểm source
+    await task_service.track_for_task(order_id, {"position": source})
 
-        logger.info(f"📤 [one-to-many] Gửi lệnh RCS: {ics_url}/ics/taskOrder/addTask | Payload: {json.dumps(payload)}")
-        async with httpx.AsyncClient(timeout=5) as client:
-            res = await client.post(f"{ics_url}/ics/taskOrder/addTask", json=payload)
-            res.raise_for_status()
-            res_json = res.json()
-        logger.info(f"📥 [one-to-many] RCS phản hồi ({res.status_code}): {res_json}")
+    logger.info(f"📤 [one-to-many] Gửi lệnh RCS: {ics_url}/ics/taskOrder/addTask | Payload: {json.dumps(payload)}")
+    res_json = None
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                res = await client.post(
+                    f"{ics_url}/ics/taskOrder/addTask",
+                    json=payload,
+                    headers=RCS_HEADERS
+                )
+                res.raise_for_status()
+                res_json = res.json()
+            break
+        except Exception as e:
+            last_error = e
+            logger.warning(f"⚠️ [one-to-many] Lần {attempt}/3 gửi RCS thất bại cho {source}: {e}")
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(1)
 
-        # RCS nhận lệnh thành công -> CHỈ KHÓA Ô NGUỒN, KHÔNG KHÓA Ô ĐÍCH
-        await pos_manager.block_point(source)
-
-        # CẬP NHẬT CON TRỎ XOAY VÒNG SANG Ô KẾ TIẾP CHO LẦN SAU
-        _last_dest_index[source] = (selected_idx + 1) % n
-
-        logger.info(
-            f"[one-to-many] Đã điều xe xoay vòng {source} -> {selected_dest} (vị trí {selected_idx + 1}/{n}) "
-            f"(Order: {order_id}, Code: {model_code}, Next: index {(_last_dest_index[source])})"
-        )
-
-    except Exception as e:
-        logger.error(f"[one-to-many] Gọi RCS thất bại cho {source} -> {selected_dest}: {e}. Rollback tracking.")
+    if res_json is None:
+        logger.error(f"❌ [one-to-many] Gọi RCS thất bại cho {source} -> {selected_dest}: {last_error}. Rollback tracking.")
         task_service.tracking_task.pop(order_id, None)
+        await pos_manager.mark_failed(source)
+        return
+
+    logger.info(f"📥 [one-to-many] RCS phản hồi: {res_json}")
+
+    if str(res_json.get("code")) != "1000":
+        logger.error(
+            f"❌ [one-to-many] RCS từ chối lệnh {order_id} cho {source}: "
+            f"code={res_json.get('code')} desc={res_json.get('desc')} | body={res_json}"
+        )
+        task_service.tracking_task.pop(order_id, None)
+        await pos_manager.mark_failed(source)
+        return
+
+    # RCS nhận lệnh thành công -> CHỈ KHÓA Ô NGUỒN, KHÔNG KHÓA Ô ĐÍCH
+    await pos_manager.block_point(source)
+
+    # CẬP NHẬT CON TRỎ XOAY VÒNG SANG Ô KẾ TIẾP CHO LẦN SAU
+    _last_dest_index[source] = (selected_idx + 1) % n
+
+    logger.info(
+        f"[one-to-many] Đã điều xe xoay vòng {source} -> {selected_dest} (vị trí {selected_idx + 1}/{n}) "
+        f"(Order: {order_id}, Code: {model_code}, Next: index {(_last_dest_index[source])})"
+    )
