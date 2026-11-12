@@ -12,6 +12,7 @@ from shared.logger import get_logger
 from services.POS_manager import pos_manager
 from services.Task_manager import task_service
 from core.config import settings
+import json
 import time
 import uuid
 import httpx
@@ -54,9 +55,12 @@ async def process_auto(data: dict) -> None:
         # Ghi tracking chỉ riêng điểm source
         await task_service.track_for_task(order_id, {"position": source})
 
+        logger.info(f"📤 [empty_one_place] Gửi lệnh RCS: {ics_url}/ics/taskOrder/addTask | Payload: {json.dumps(payload)}")
         async with httpx.AsyncClient(timeout=5) as client:
             res = await client.post(f"{ics_url}/ics/taskOrder/addTask", json=payload)
             res.raise_for_status()
+            res_json = res.json()
+        logger.info(f"📥 [empty_one_place] RCS phản hồi ({res.status_code}): {res_json}")
 
         # RCS nhận lệnh thành công -> CHỈ KHÓA Ô NGUỒN, KHÔNG KHÓA Ô ĐÍCH (bãi chung)
         await pos_manager.block_point(source)

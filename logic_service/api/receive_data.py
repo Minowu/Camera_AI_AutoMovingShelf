@@ -12,8 +12,12 @@ router = APIRouter()
 @router.post("/ai-data")
 async def receive_data(payload: Dict):
     try:
+        # Ghi log rõ ràng những điểm đang có hàng
+        hang_list = [k for k, v in payload.items() if isinstance(v, dict) and v.get("label") == "hang"]
+        if hang_list:
+            logger.info(f"📥 [NHẬN TÍN HIỆU AI] {len(payload)} ô | Đang CÓ HÀNG tại: {hang_list}")
         await pos_manager.update_state(payload)
-        return {"status": "success", "message": "Data updated"}
+        return {"status": "success", "message": "Data updated", "active_hang": len(hang_list)}
     except Exception as e:
         logger.error(f"Error updating state: {e}")
         raise HTTPException(status_code=500, detail=str(e))
