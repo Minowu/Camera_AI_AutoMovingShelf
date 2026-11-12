@@ -38,6 +38,22 @@ class TaskService:
                 await pos_manager.un_block_point(self.tracking_task[order_id]["position"])
                 self.tracking_task.pop(order_id, None)
 
+            # Đơn Single chuyển 2 điểm của Hà Nam (prefix S-): Mở khóa cùng lúc cả 2 điểm khi xong (3) hoặc hủy (4, 5)
+            if task_data["status"] in (3, 7, 8) and first_str in("S") :
+                await pos_manager.un_block_point(self.tracking_task[order_id]["position"])
+                self.tracking_task.pop(order_id, None)
+
+            # Đơn trả kệ rỗng (X-) và Đơn 1 nguồn nhiều đích (O-) của Hà Nam:
+            # Mở khóa khi robot vừa nhấc kệ xong (subTaskSeq=2, subTaskStatus=2) hoặc khi xong/hủy (3, 4, 5)
+            if first_str in( "X","O"):
+                sub_status = str(payload.get("subTaskStatus"))
+                sub_seq = str(payload.get("subTaskSeq"))
+                if (sub_status == "2" and sub_seq == "2") or task_data["status"] in (3, 7, 8):
+                    positions = self.tracking_task.pop(order_id)["position"]
+                    logger.info(f"⏳ [DELAY UNBLOCK] Đơn {order_id} đợi 30s trước khi mở khóa ô: {positions}")
+                    await asyncio.sleep(30)
+                    await pos_manager.un_block_point(positions)
+
             if task_data["status"] in (23, 3) and first_str == "2":
                 await pos_manager.un_block_point(self.tracking_task[order_id]["position"])
                 self.tracking_task.pop(order_id, None)

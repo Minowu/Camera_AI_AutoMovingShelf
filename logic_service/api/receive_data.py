@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 import time
+import asyncio
 from shared.logger import get_logger
 from fastapi import APIRouter, Request
 from services.POS_manager import pos_manager
@@ -12,8 +13,12 @@ router = APIRouter()
 @router.post("/ai-data")
 async def receive_data(payload: Dict):
     try:
+        # Ghi log rõ ràng những điểm đang có hàng
+        hang_list = [k for k, v in payload.items() if isinstance(v, dict) and v.get("label") == "hang"]
+        if hang_list:
+            logger.info(f"📥 [NHẬN TÍN HIỆU AI] {len(payload)} ô | Đang CÓ HÀNG tại: {hang_list}")
         await pos_manager.update_state(payload)
-        return {"status": "success", "message": "Data updated"}
+        return {"status": "success", "message": "Data updated", "active_hang": len(hang_list)}
     except Exception as e:
         logger.error(f"Error updating state: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -31,9 +36,10 @@ async def active_proc(request: Request):
 @router.post("/task-status")
 async def receive_task_status(request: Request):
     payload = await request.json()
-    data = await task_service.unlock_task(payload)
+    logger.info(f"📥 [NHẬN TASK STATUS] orderId={payload.get('orderId')} | status={payload.get('status')} | subTaskSeq={payload.get('subTaskSeq')} | subTaskStatus={payload.get('subTaskStatus')}")
+    asyncio.create_task(task_service.unlock_task(payload))
 
-    return {"status": "success", "data": data}
+    return {"status": "success", "data": None}
 
 @router.post("/robot-zone")
 async def receive_task_status(request: Request):
