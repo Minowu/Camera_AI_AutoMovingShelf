@@ -208,6 +208,8 @@ class Position_Manager:
             pos_data = self._position_state.get(p)
             if pos_data:
                 self._position_state[p]["label"] = "block"
+        blocked_list = [k for k, v in self._position_state.items() if v.get("label") == "block"]
+        logger.info(f"🔒 [BLOCK] Đã khóa ô: {points} | Các ô đang block: {blocked_list}")
 
     async def un_block_point(self, point):
         points = point if isinstance(point, list) else [point]
@@ -216,6 +218,8 @@ class Position_Manager:
             pos_data = self._position_state.get(p)
             if pos_data:
                 self._position_state[p]["label"] = "None"
+        blocked_list = [k for k, v in self._position_state.items() if v.get("label") == "block"]
+        logger.info(f"🔓 [UNBLOCK] Đã mở khóa ô: {points} | Các ô đang block còn lại: {blocked_list}")
 
     async def active_request(self, data):
         key = str(data.get("end"))

@@ -35,6 +35,7 @@ async def active_proc(request: Request):
 @router.post("/task-status")
 async def receive_task_status(request: Request):
     payload = await request.json()
+    logger.info(f"📥 [NHẬN TASK STATUS] orderId={payload.get('orderId')} | status={payload.get('status')} | subTaskSeq={payload.get('subTaskSeq')} | subTaskStatus={payload.get('subTaskStatus')}")
     data = await task_service.unlock_task(payload)
 
     return {"status": "success", "data": data}
