@@ -62,34 +62,17 @@ async def block_point(payload: Any = Body(...)):
 
 @router.post("/unblock_point")
 async def unblock_point(payload: Any = Body(...)):
-    """Mở khóa một hoặc nhiều điểm thủ công, tùy chọn gỡ đơn kẹt trong tracking_task."""
+    """Mở khóa một hoặc nhiều điểm thủ công."""
     try:
         pts = extract_points(payload)
         if not pts:
             raise HTTPException(status_code=400, detail="Không tìm thấy danh sách điểm cần mở khóa")
         await pos_manager.un_block_point(pts)
 
-        # Mặc định gỡ đơn kẹt trong tracking_task nếu có chứa ô được mở khóa thủ công
-        clear_task = True
-        if isinstance(payload, dict) and "clear_task" in payload:
-            clear_task = bool(payload["clear_task"])
-
-        cleared_orders = []
-        if clear_task:
-            for oid, tdata in list(task_service.tracking_task.items()):
-                pos = tdata.get("position")
-                t_positions = pos if isinstance(pos, list) else [pos]
-                t_positions_str = [str(p).strip() for p in t_positions if p is not None]
-                if any(p in t_positions_str for p in pts):
-                    task_service.tracking_task.pop(oid, None)
-                    cleared_orders.append(oid)
-                    logger.info(f"🧹 [MANUAL UNBLOCK] Gỡ đơn kẹt {oid} khỏi tracking_task do mở khóa ô {pts}")
-
         return {
             "status": "success",
             "message": f"Đã mở khóa thành công {len(pts)} điểm",
-            "points": pts,
-            "cleared_orders": cleared_orders
+            "points": pts
         }
     except HTTPException:
         raise
@@ -483,7 +466,7 @@ async def serve_control_ui():
         const res = await fetch('/unblock_point', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({points: [id], clear_task: true})
+          body: JSON.stringify(id)
         });
         if (res.ok) {
           showToast(`Đã Mở ${id}`);
@@ -500,7 +483,7 @@ async def serve_control_ui():
         await fetch('/unblock_point', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({points: ids, clear_task: true})
+          body: JSON.stringify(ids)
         });
         showToast(`Đã mở ${ids.length} ô`);
         fetchData();
