@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 import time
 import asyncio
 from shared.logger import get_logger
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from services.POS_manager import pos_manager
 from services.Task_manager import task_service
 from services.Robot_manager import robot_service
@@ -13,10 +13,10 @@ router = APIRouter()
 @router.post("/ai-data")
 async def receive_data(payload: Dict):
     try:
-        # Ghi log rõ ràng những điểm đang có hàng
+        received_points = list(payload.keys())
         hang_list = [k for k, v in payload.items() if isinstance(v, dict) and v.get("label") == "hang"]
         if hang_list:
-            logger.info(f"📥 [NHẬN TÍN HIỆU AI] {len(payload)} ô | Đang CÓ HÀNG tại: {hang_list}")
+            logger.info(f"📥 [NHẬN TÍN HIỆU AI] Nhận các ô: {received_points} | Đang CÓ HÀNG tại: {hang_list}")
         await pos_manager.update_state(payload)
         return {"status": "success", "message": "Data updated", "active_hang": len(hang_list)}
     except Exception as e:
