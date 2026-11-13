@@ -95,8 +95,12 @@ class Position_Manager:
 
             if pending and pending["label"] == new_label:
                 elapsed = now - pending["start_ts"]
-                if elapsed >= self.time_recognition:
-                    # Đã đủ 5 giây liên tục -> Xác nhận trạng thái mới
+                file_name = self.mapping.get(pos_id)
+                pos_cfg = self.data_configs.get(file_name, {}).get(pos_id, {}) if file_name else {}
+                required_time = pos_cfg.get("time_recognition", self.time_recognition)
+
+                if elapsed >= required_time:
+                    # Đã đủ required_time giây liên tục -> Xác nhận trạng thái mới
                     self._position_state[pos_id] = {
                         "label": new_label,
                         "group_id": group_id,
