@@ -81,6 +81,28 @@ async def unblock_point(payload: Any = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def load_ui_zones() -> Dict[str, Any]:
+    """Đọc cấu hình phân chia khu vực hiển thị từ file ui_zones.json."""
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "config", "ui_zones.json"),
+        os.path.join("config", "ui_zones.json"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading ui_zones.json: {e}")
+    return {}
+
+
+@router.get("/api/ui-zones")
+async def get_ui_zones():
+    """API trả về danh sách các khu vực giao diện định nghĩa trong ui_zones.json."""
+    return load_ui_zones()
+
+
 def get_hanam_positions_catalog() -> Dict[str, Dict[str, Any]]:
     """Đọc cấu hình Hà Nam và tổng hợp đầy đủ 205 ô (110 nguồn + 95 đích)."""
     cfg = pos_manager.data_configs.get("HaNam_config.json")
@@ -135,9 +157,31 @@ def get_hanam_positions_catalog() -> Dict[str, Dict[str, Any]]:
 
 @router.get("/api/positions")
 async def get_positions():
-    """API trả về trạng thái thời gian thực của toàn bộ 205 ô Hà Nam."""
+    """API trả về trạng thái thời gian thực của toàn bộ 205 ô Hà Nam kèm phân khu UI."""
     catalog = get_hanam_positions_catalog()
+    ui_zones = load_ui_zones()
     now = time.time()
+
+    # Xây dựng bảng tra cứu pos_id -> zone
+    point_to_zone = {}
+    zone_stats = {}
+    for zkey, zdata in ui_zones.items():
+        zname = zdata.get("name", zkey)
+        zdesc = zdata.get("description", "")
+        pts = [str(x).strip() for x in zdata.get("points", [])]
+        zone_stats[zkey] = {
+            "key": zkey,
+            "name": zname,
+            "description": zdesc,
+            "total": len(pts),
+            "hang": 0,
+            "trong": 0,
+            "block": 0,
+            "failed": 0,
+            "points": pts
+        }
+        for pid in pts:
+            point_to_zone[pid] = zkey
 
     positions_list = []
     hang_count = 0
@@ -176,8 +220,24 @@ async def get_positions():
 
         active_order_id = pos_to_order.get(pos_id_str)
 
+        zkey = point_to_zone.get(pos_id_str, "OTHER")
+        zname = zone_stats[zkey]["name"] if zkey in zone_stats else "Chưa phân khu"
+
+        # Cộng dồn thống kê cho từng khu
+        if zkey in zone_stats:
+            if confirmed_label == "hang":
+                zone_stats[zkey]["hang"] += 1
+            elif confirmed_label == "trong":
+                zone_stats[zkey]["trong"] += 1
+            if is_blocked:
+                zone_stats[zkey]["block"] += 1
+            if is_failed:
+                zone_stats[zkey]["failed"] += 1
+
         positions_list.append({
             "pos_id": pos_id_str,
+            "zone": zkey,
+            "zone_name": zname,
             "is_source": item["is_source"],
             "logic_path": item["logic_path"],
             "matching": item["matching"],
@@ -203,58 +263,71 @@ async def get_positions():
             "failed": failed_count,
             "active_tasks": len(task_service.tracking_task)
         },
+        "zones": zone_stats,
         "positions": positions_list
     }
 
 
 @router.get("/ui", response_class=HTMLResponse)
 async def serve_control_ui():
-    """Giao diện điều khiển Block/Unblock tối giản, mật độ cao (High Density)."""
+    """Giao diện điều khiển Block/Unblock siêu tối giản, mật độ cao (Ultra-compact)."""
     html_content = """<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quản Lý Block/Unblock - Hà Nam</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #0f172a;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0b1120;
       color: #f1f5f9;
-      padding: 8px 12px;
-      font-size: 13px;
+      padding: 4px 8px;
+      font-size: 12px;
     }
-    /* Compact Top Bar - 1 dòng duy nhất */
+    
+    /* Top Bar cực gọn */
     .topbar {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 6px;
-      padding: 6px 12px;
-      margin-bottom: 8px;
+      padding: 4px 8px;
+      margin-bottom: 6px;
       flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
+    
     .stats {
       display: flex;
-      gap: 12px;
+      gap: 8px;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11.5px;
       white-space: nowrap;
+      background: #0f172a;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #334155;
     }
     .stats span { color: #94a3b8; }
     .stats b { color: #f8fafc; }
-    .stat-hang b { color: #f59e0b; }
-    .stat-trong b { color: #10b981; }
-    .stat-block b { color: #f97316; }
-    .stat-failed b { color: #ef4444; }
+    .stat-hang b { color: #fbbf24; }
+    .stat-trong b { color: #34d399; }
+    .stat-block b { color: #fb923c; }
+    .stat-failed b { color: #f87171; }
 
     .filters {
       display: flex;
       gap: 4px;
       flex-wrap: wrap;
+      align-items: center;
     }
     .btn-filter {
       background: #334155;
@@ -263,7 +336,10 @@ async def serve_control_ui():
       padding: 3px 8px;
       border-radius: 4px;
       font-size: 11.5px;
+      font-weight: 500;
       cursor: pointer;
+      transition: all 0.1s ease;
+      white-space: nowrap;
     }
     .btn-filter:hover { background: #475569; color: #fff; }
     .btn-filter.active { background: #2563eb; border-color: #3b82f6; color: #fff; font-weight: 600; }
@@ -279,13 +355,14 @@ async def serve_control_ui():
       background: #0f172a;
       border: 1px solid #475569;
       color: #fff;
-      padding: 4px 8px;
+      padding: 3px 8px;
       border-radius: 4px;
-      font-size: 12px;
-      width: 130px;
+      font-size: 11.5px;
+      width: 120px;
       outline: none;
+      transition: width 0.15s;
     }
-    .search-box input:focus { border-color: #3b82f6; width: 160px; }
+    .search-box input:focus { border-color: #38bdf8; width: 150px; }
 
     .btn-unblock-all {
       background: #7f1d1d;
@@ -300,20 +377,90 @@ async def serve_control_ui():
     }
     .btn-unblock-all:hover { background: #dc2626; color: #fff; }
 
-    /* High Density Grid */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    /* Zone Section Container */
+    #zonesContainer {
+      display: flex;
+      flex-direction: column;
       gap: 6px;
     }
+
+    .zone-section {
+      background: #131d31;
+      border: 1px solid #23354d;
+      border-radius: 5px;
+      padding: 5px 8px 7px 8px;
+    }
+
+    .zone-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #1e293b;
+      user-select: none;
+    }
+    .zone-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .zone-badge-tag {
+      background: #1e3a8a;
+      color: #93c5fd;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 3px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      border: 1px solid #2563eb;
+    }
+    .zone-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .zone-count {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .zone-mini-stats {
+      display: flex;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .z-badge {
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: #0f172a;
+      border: 1px solid #334155;
+    }
+    .z-badge.z-hang { color: #fbbf24; border-color: #78350f; background: rgba(245, 158, 11, 0.1); }
+    .z-badge.z-trong { color: #34d399; border-color: #064e3b; background: rgba(16, 185, 129, 0.1); }
+    .z-badge.z-block { color: #fb923c; border-color: #7c2d12; background: rgba(249, 115, 22, 0.15); font-weight: 700; }
+    .z-badge.z-failed { color: #f87171; border-color: #7f1d1d; background: rgba(239, 68, 68, 0.15); font-weight: 700; }
+
+    /* High Density Grid - Mật độ siêu cao */
+    .zone-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+      gap: 4px;
+    }
+    
     .cell {
       background: #1e293b;
       border: 1px solid #334155;
-      border-radius: 5px;
-      padding: 5px 7px;
+      border-radius: 4px;
+      padding: 4px 6px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 2px;
+    }
+    .cell:hover {
+      border-color: #64748b;
     }
     .cell.is-block {
       background: #2e1809;
@@ -324,7 +471,8 @@ async def serve_control_ui():
       border-color: #ef4444;
     }
     .cell.is-hang {
-      border-color: #854d0e;
+      border-color: #b45309;
+      background: rgba(180, 83, 9, 0.15);
     }
 
     .cell-header {
@@ -334,15 +482,16 @@ async def serve_control_ui():
       line-height: 1;
     }
     .cell-id {
-      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.3px;
+      color: #fff;
     }
     .cell-tag {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 700;
-      padding: 2px 4px;
-      border-radius: 3px;
+      padding: 1px 3px;
+      border-radius: 2px;
       line-height: 1;
       text-transform: uppercase;
     }
@@ -352,14 +501,32 @@ async def serve_control_ui():
     .tag-trong { background: #059669; color: #fff; }
     .tag-none { background: #475569; color: #94a3b8; }
 
+    .cell-sub {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: #94a3b8;
+      line-height: 1.1;
+    }
+    .cell-type {
+      font-size: 8.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .type-src { color: #38bdf8; background: rgba(56, 189, 248, 0.15); }
+    .type-dest { color: #c084fc; background: rgba(192, 132, 252, 0.15); }
+
     .cell-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 4px;
+      gap: 3px;
+      margin-top: 1px;
     }
     .cell-btn {
-      padding: 3px 0;
-      font-size: 11px;
+      padding: 2px 0;
+      font-size: 10px;
       font-weight: 600;
       border-radius: 3px;
       cursor: pointer;
@@ -376,10 +543,10 @@ async def serve_control_ui():
     /* Toast */
     #toast {
       position: fixed;
-      bottom: 12px;
-      right: 12px;
-      background: #0f172a;
-      border: 1px solid #3b82f6;
+      bottom: 10px;
+      right: 10px;
+      background: #1e293b;
+      border: 1px solid #38bdf8;
       color: #fff;
       padding: 6px 12px;
       border-radius: 4px;
@@ -395,37 +562,35 @@ async def serve_control_ui():
   <div class="topbar">
     <div class="stats">
       <span>Tổng: <b id="sTotal">205</b></span>
-      <span class="stat-hang">Hàng: <b id="sHang">0</b></span>
-      <span class="stat-trong">Trống: <b id="sTrong">0</b></span>
-      <span class="stat-block">Block: <b id="sBlock">0</b></span>
+      <span class="stat-hang">H: <b id="sHang">0</b></span>
+      <span class="stat-trong">T: <b id="sTrong">0</b></span>
+      <span class="stat-block">B: <b id="sBlock">0</b></span>
       <span class="stat-failed">Lỗi: <b id="sFailed">0</b></span>
     </div>
 
-    <div class="filters">
-      <button class="btn-filter active" data-filter="all" onclick="setFilter('all')">Tất cả</button>
-      <button class="btn-filter alert-filter" data-filter="alert" onclick="setFilter('alert')">Đang Block/Lỗi</button>
-      <button class="btn-filter" data-filter="hang" onclick="setFilter('hang')">Có hàng</button>
-      <button class="btn-filter" data-filter="auto" onclick="setFilter('auto')">Auto</button>
-      <button class="btn-filter" data-filter="one-to-many" onclick="setFilter('one-to-many')">One-to-Many</button>
-      <button class="btn-filter" data-filter="empty_one_place" onclick="setFilter('empty_one_place')">Empty</button>
-      <button class="btn-filter" data-filter="dest" onclick="setFilter('dest')">Ô Đích</button>
+    <div class="filters" id="filterBar">
+      <button class="btn-filter active" data-filter="all" onclick="setFilter('all')">Tất cả (205)</button>
+      <button class="btn-filter alert-filter" data-filter="alert" onclick="setFilter('alert')">⚠️ Block/Lỗi</button>
+      <button class="btn-filter" data-filter="hang" onclick="setFilter('hang')">📦 Có hàng</button>
     </div>
 
     <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Tìm mã ô...">
+      <input type="text" id="searchInput" placeholder="🔍 Tìm mã ô...">
       <button class="btn-unblock-all" onclick="unlockAll()">Mở hết Block/Lỗi</button>
     </div>
   </div>
 
-  <!-- High Density Grid -->
-  <div id="grid" class="grid"></div>
+  <!-- Container hiển thị các Khối Khu Vực -->
+  <div id="zonesContainer"></div>
   <div id="toast"></div>
 
   <script>
     let rawPositions = [];
+    let zonesConfig = {};
     let currentFilter = 'all';
     let searchQuery = '';
     let isFetching = false;
+    let initialFilterButtonsBuilt = false;
 
     function showToast(msg) {
       const t = document.getElementById('toast');
@@ -490,6 +655,21 @@ async def serve_control_ui():
       } catch (e) { showToast(`Lỗi: ${e.message}`); }
     }
 
+    function buildFilterButtons(zones) {
+      if (initialFilterButtonsBuilt) return;
+      const bar = document.getElementById('filterBar');
+      
+      for (const [zkey, zdata] of Object.entries(zones)) {
+        const btn = document.createElement('button');
+        btn.className = 'btn-filter';
+        btn.setAttribute('data-filter', zkey);
+        btn.textContent = `${zkey} (${zdata.total})`;
+        btn.onclick = () => setFilter(zkey);
+        bar.appendChild(btn);
+      }
+      initialFilterButtonsBuilt = true;
+    }
+
     async function fetchData() {
       if (isFetching) return;
       isFetching = true;
@@ -497,67 +677,133 @@ async def serve_control_ui():
         const res = await fetch('/api/positions');
         if (!res.ok) return;
         const data = await res.json();
+        
         const s = data.summary || {};
         document.getElementById('sTotal').textContent = s.total || 0;
         document.getElementById('sHang').textContent = s.hang || 0;
         document.getElementById('sTrong').textContent = s.trong || 0;
         document.getElementById('sBlock').textContent = s.block || 0;
         document.getElementById('sFailed').textContent = s.failed || 0;
+
         rawPositions = data.positions || [];
+        zonesConfig = data.zones || {};
+
+        buildFilterButtons(zonesConfig);
         render();
       } finally {
         isFetching = false;
       }
     }
 
+    function renderCell(p) {
+      let tag = '-';
+      let tagCls = 'tag-none';
+      let cellCls = 'cell';
+
+      if (p.is_failed) {
+        tag = 'LỖI';
+        tagCls = 'tag-failed';
+        cellCls += ' is-failed';
+      } else if (p.is_blocked) {
+        tag = 'BLOCK';
+        tagCls = 'tag-block';
+        cellCls += ' is-block';
+      } else if (p.confirmed_label === 'hang') {
+        tag = 'HÀNG';
+        tagCls = 'tag-hang';
+        cellCls += ' is-hang';
+      } else if (p.confirmed_label === 'trong') {
+        tag = 'TRỐNG';
+        tagCls = 'tag-trong';
+      }
+
+      const pcode = p.process_code ? p.process_code.replace('SingleGroup', '').replace('SEGroup', '') : '';
+
+      return `
+        <div class="${cellCls}">
+          <div class="cell-header">
+            <span class="cell-id">${p.pos_id}</span>
+            <span class="cell-tag ${tagCls}">${tag}</span>
+          </div>
+          <div class="cell-sub">
+            <span class="cell-type ${p.is_source ? 'type-src' : 'type-dest'}">${p.is_source ? 'NGUỒN' : 'ĐÍCH'}</span>
+            <span>${pcode}</span>
+          </div>
+          <div class="cell-actions">
+            <button class="cell-btn btn-b" onclick="sendBlock('${p.pos_id}')">Block</button>
+            <button class="cell-btn btn-u" onclick="sendUnblock('${p.pos_id}')">Unblock</button>
+          </div>
+        </div>
+      `;
+    }
+
     function render() {
-      const g = document.getElementById('grid');
-      const filtered = rawPositions.filter(p => {
+      const container = document.getElementById('zonesContainer');
+      
+      const activePositions = rawPositions.filter(p => {
         if (searchQuery && !p.pos_id.toLowerCase().includes(searchQuery)) return false;
         if (currentFilter === 'alert') return p.is_blocked || p.is_failed;
         if (currentFilter === 'hang') return p.confirmed_label === 'hang';
-        if (currentFilter === 'auto') return p.logic_path === 'auto';
-        if (currentFilter === 'one-to-many') return p.logic_path === 'one-to-many';
-        if (currentFilter === 'empty_one_place') return p.logic_path === 'empty_one_place';
-        if (currentFilter === 'dest') return !p.is_source;
+        if (currentFilter !== 'all' && currentFilter !== 'alert' && currentFilter !== 'hang') {
+          return p.zone === currentFilter;
+        }
         return true;
       });
 
-      g.innerHTML = filtered.map(p => {
-        let tag = '-';
-        let tagCls = 'tag-none';
-        let cellCls = 'cell';
+      const groupedByZone = {};
+      for (const [zkey, zdata] of Object.entries(zonesConfig)) {
+        groupedByZone[zkey] = {
+          info: zdata,
+          positions: []
+        };
+      }
+      groupedByZone['OTHER'] = {
+        info: { name: 'Chưa phân khu', total: 0 },
+        positions: []
+      };
 
-        if (p.is_failed) {
-          tag = 'LỖI';
-          tagCls = 'tag-failed';
-          cellCls += ' is-failed';
-        } else if (p.is_blocked) {
-          tag = 'BLOCK';
-          tagCls = 'tag-block';
-          cellCls += ' is-block';
-        } else if (p.confirmed_label === 'hang') {
-          tag = 'HÀNG';
-          tagCls = 'tag-hang';
-          cellCls += ' is-hang';
-        } else if (p.confirmed_label === 'trong') {
-          tag = 'TRỐNG';
-          tagCls = 'tag-trong';
-        }
+      for (const p of activePositions) {
+        const zk = p.zone in groupedByZone ? p.zone : 'OTHER';
+        groupedByZone[zk].positions.push(p);
+      }
 
-        return `
-          <div class="${cellCls}">
-            <div class="cell-header">
-              <span class="cell-id">${p.pos_id}</span>
-              <span class="cell-tag ${tagCls}">${tag}</span>
+      let html = '';
+      for (const [zkey, zgroup] of Object.entries(groupedByZone)) {
+        if (zgroup.positions.length === 0) continue;
+
+        const zInfo = zgroup.info || {};
+        const zHang = zgroup.positions.filter(p => p.confirmed_label === 'hang').length;
+        const zTrong = zgroup.positions.filter(p => p.confirmed_label === 'trong').length;
+        const zBlock = zgroup.positions.filter(p => p.is_blocked).length;
+        const zFailed = zgroup.positions.filter(p => p.is_failed).length;
+
+        html += `
+          <div class="zone-section" id="section-${zkey}">
+            <div class="zone-header">
+              <div class="zone-header-left">
+                <span class="zone-badge-tag">${zkey}</span>
+                <span class="zone-title">${zInfo.name || zkey}</span>
+                <span class="zone-count">(${zgroup.positions.length})</span>
+              </div>
+              <div class="zone-mini-stats">
+                <span class="z-badge z-hang">H: ${zHang}</span>
+                <span class="z-badge z-trong">T: ${zTrong}</span>
+                ${zBlock > 0 ? `<span class="z-badge z-block">B: ${zBlock}</span>` : ''}
+                ${zFailed > 0 ? `<span class="z-badge z-failed">Lỗi: ${zFailed}</span>` : ''}
+              </div>
             </div>
-            <div class="cell-actions">
-              <button class="cell-btn btn-b" onclick="sendBlock('${p.pos_id}')">Block</button>
-              <button class="cell-btn btn-u" onclick="sendUnblock('${p.pos_id}')">Unblock</button>
+            <div class="zone-grid">
+              ${zgroup.positions.map(renderCell).join('')}
             </div>
           </div>
         `;
-      }).join('');
+      }
+
+      if (!html) {
+        html = '<div style="text-align:center; padding: 20px; color:#94a3b8;">Không tìm thấy vị trí nào.</div>';
+      }
+
+      container.innerHTML = html;
     }
 
     fetchData();
