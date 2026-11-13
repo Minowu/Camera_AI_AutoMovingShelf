@@ -53,7 +53,7 @@ async def request_RCS(data, target_robot = None):
                 "modelProcessCode": "Tra_XT_AF", 
                 "fromSystem": "Thadosoft", 
                 "orderId": order_id,  
-                "priority": 4,
+                "priority": 6,
                 "taskOrderDetail": [ 
                     {    
                         "taskPath": f"{data[0]},{data[1]}",
