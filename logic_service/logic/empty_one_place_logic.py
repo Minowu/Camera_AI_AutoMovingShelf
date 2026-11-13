@@ -49,7 +49,7 @@ async def process_auto(data: dict) -> None:
         "modelProcessCode": model_code,
         "fromSystem": "Thadosoft",
         "orderId": order_id,
-        "priority": 4,
+        "priority": 6,
         "taskOrderDetail": [{"taskPath": task_path}]
     }
 
