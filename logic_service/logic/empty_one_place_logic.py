@@ -85,7 +85,7 @@ async def process_auto(data: dict) -> None:
 
     logger.info(f"📥 [empty_one_place] RCS phản hồi: {res_json}")
 
-    if str(res_json.get("code")) != "1000":
+    if str(res_json.get("code")) not in ("1000", "2106"):
         logger.error(
             f"❌ [empty_one_place] RCS từ chối lệnh {order_id} cho {source}: "
             f"code={res_json.get('code')} desc={res_json.get('desc')} | body={res_json}"
