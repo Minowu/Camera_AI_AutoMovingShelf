@@ -20,6 +20,7 @@ import uvicorn
 CONFIG_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "logic_service", "config", "map_config", "HaNam_config.json")
 )
+GROUP_ID = os.path.basename(CONFIG_PATH).removesuffix("_config.json")
 LOGIC_SERVICE_URL = "http://127.0.0.1:8000"
 
 # Bộ nhớ 205 vị trí trong RAM
@@ -42,7 +43,7 @@ def load_all_hanam_points():
             "pos_id": pos_id,
             "label": "trong",  # Mặc định TRỐNG
             "is_source": True,
-            "group_id": info.get("group_id", 1),
+            "group_id": GROUP_ID,
             "logic_path": info.get("logic_path", "auto"),
             "matching": info.get("matching", []),
             "process_code": info.get("process_code", "")
@@ -60,7 +61,7 @@ def load_all_hanam_points():
                     "pos_id": dest,
                     "label": "trong",  # Mặc định TRỐNG
                     "is_source": False,
-                    "group_id": 1,
+                    "group_id": GROUP_ID,
                     "logic_path": "DESTINATION",
                     "matching": [],
                     "process_code": "Ô Đích / Bãi đệm"
@@ -357,7 +358,7 @@ async def background_ai_broadcaster():
                     lbl = info["label"]
                     payload[pos_id] = {
                         "label": lbl,
-                        "group_id": info.get("group_id", 1)
+                        "group_id": GROUP_ID
                     }
                     if lbl == "hang":
                         hang_list.append(pos_id)

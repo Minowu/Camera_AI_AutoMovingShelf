@@ -17,9 +17,8 @@ logger = get_logger("logic_service")
 class Position_Manager:
     def __init__(self, time_recognition) -> None:
         self._consumer_task: Optional[asyncio.Task] = None
-        self._position_state: Dict[str, Any] = {}
+        self._position_state: Dict[Tuple[str, str], Any] = {}
         self.data_configs = {}
-        self.mapping = {}
         self._pending_state = {}
         self._registry = {}
         self._last_check_time = {}
@@ -48,9 +47,6 @@ class Position_Manager:
                             # Lưu toàn bộ nội dung file vào data
                             self.data_configs[filename] = content
                             
-                            # Mapping từng key trong file đó để biết nó thuộc về file nào (logic nào)
-                            for key in content.keys():
-                                self.mapping[key] = filename
 
                 except Exception as e:
                     print(f"[ERROR] Could not load {filename}: {e}")
@@ -64,8 +60,9 @@ class Position_Manager:
                 await self._consumer_task
             self._consumer_task = None
 
-    async def mark_failed(self, pos_id):
-        self._failed_points.add(pos_id)
+    async def mark_failed(self, pos_id, group_id):
+        key = (group_id, str(pos_id))
+        self._failed_points.add(key)
         logger.error(f"[POS_manager] Điểm {pos_id} bị đánh dấu thất bại (failed), tạm dừng dispatch")
 
     async def update_state(self, data) -> None:
@@ -74,56 +71,54 @@ class Position_Manager:
         for pos_id, info in data.items():
             new_label = info.get("label")
             group_id = info.get("group_id")
-            current_confirmed = self._position_state.get(pos_id, {})
+            key = (group_id, pos_id)
+            pos_cfg = self.data_configs.get(f"{group_id}_config.json", {}).get(pos_id)
+            current_confirmed = self._position_state.get(key, {})
             
             if current_confirmed.get("label") == "block":
                 continue
 
             if new_label == current_confirmed.get("label"):
-                self._position_state[pos_id]["ts"] = now
-                self._pending_state.pop(pos_id, None)
+                self._position_state[key]["ts"] = now
+                self._pending_state.pop(key, None)
 
                 # Kiểm tra có trong config thì thực hiện gửi đến đúng logic
-                file_name = self.mapping.get(pos_id)
-                if file_name and new_label == "hang":
-                    if pos_id not in self._failed_points and pos_id not in self._dispatching:
-                        self._dispatching.add(pos_id)
-                        asyncio.create_task(self.request_service_auto(self.data_configs[file_name][pos_id], pos_id))
+                if pos_cfg and new_label == "hang":
+                    if key not in self._failed_points and key not in self._dispatching:
+                        self._dispatching.add(key)
+                        asyncio.create_task(self.request_service_auto(pos_cfg, key))
                 continue
 
-            pending = self._pending_state.get(pos_id)
+            pending = self._pending_state.get(key)
 
             if pending and pending["label"] == new_label:
                 elapsed = now - pending["start_ts"]
-                file_name = self.mapping.get(pos_id)
-                pos_cfg = self.data_configs.get(file_name, {}).get(pos_id, {}) if file_name else {}
-                required_time = pos_cfg.get("time_recognition", self.time_recognition)
+                required_time = (pos_cfg or {}).get("time_recognition", self.time_recognition)
 
                 if elapsed >= required_time:
                     # Đã đủ required_time giây liên tục -> Xác nhận trạng thái mới
-                    self._position_state[pos_id] = {
+                    self._position_state[key] = {
                         "label": new_label,
                         "group_id": group_id,
                         "ts": now,
                     }
-                    self._pending_state.pop(pos_id, None)
+                    self._pending_state.pop(key, None)
 
             else:
-                self._pending_state[pos_id] = {
+                self._pending_state[key] = {
                     "label": new_label,
                     "start_ts": now
                 }
 
-    async def request_service_auto(self, data, pos_id=None):
+    async def request_service_auto(self, data, key):
         try:
-            await self.execute_logic(data, 0)
+            await self.execute_logic(data, 0, key[0])
         except Exception as e:
             logger.warning(f"Error: {e}")
         finally:
-            if pos_id is not None:
-                self._dispatching.discard(pos_id)
+            self._dispatching.discard(key)
 
-    async def execute_logic(self, data, mode):
+    async def execute_logic(self, data, mode, group_id):
         try:
             logic_path = data.get('logic_path')
             if not logic_path:
@@ -133,7 +128,7 @@ class Position_Manager:
             process_func = await self.get_logic_func(logic_path, mode)
 
             if process_func:
-                response = await process_func(data) 
+                response = await process_func(data, group_id)
                 return response
             else:
                 logger.warning(f"Function process_auto not found in {logic_path}")
@@ -190,62 +185,63 @@ class Position_Manager:
         
         return None
 
-    async def get_state(self, points):
+    async def get_state(self, points, group_id):
         states = []
         for point in points:
-            pos_data = self._position_state.get(point, {})            
+            pos_data = self._position_state.get((group_id, str(point)), {})
             label = pos_data.get("label", None)            
             states.append(label)
         return states
 
-    async def get_group(self, point):
-        pos_data = self._position_state.get(point, {})            
+    async def get_group(self, point, group_id):
+        pos_data = self._position_state.get((group_id, str(point)), {})
         group = pos_data.get("group_id", None)            
         return group
 
-    async def block_point(self, point):
+    async def block_point(self, point, group_id):
         points = point if isinstance(point, list) else [point]
         now = time.time()
         for p in points:
-            p = str(p)
-            self._failed_points.discard(p)
-            self._pending_state.pop(p, None)
-            if p in self._position_state:
-                self._position_state[p]["label"] = "block"
-                self._position_state[p]["ts"] = now
+            key = (group_id, str(p))
+            self._failed_points.discard(key)
+            self._pending_state.pop(key, None)
+            if key in self._position_state:
+                self._position_state[key]["label"] = "block"
+                self._position_state[key]["ts"] = now
             else:
-                self._position_state[p] = {"label": "block", "group_id": 1, "ts": now}
+                self._position_state[key] = {"label": "block", "group_id": group_id, "ts": now}
         blocked_list = [k for k, v in self._position_state.items() if v.get("label") == "block"]
         logger.info(f"🔒 [BLOCK] Đã khóa ô: {points} | Các ô đang block: {blocked_list}")
 
-    async def un_block_point(self, point):
+    async def un_block_point(self, point, group_id):
         points = point if isinstance(point, list) else [point]
         now = time.time()
         for p in points:
-            p = str(p)
-            self._failed_points.discard(p)
-            self._pending_state.pop(p, None)
-            if p in self._position_state:
-                self._position_state[p]["label"] = "None"
-                self._position_state[p]["ts"] = now
+            key = (group_id, str(p))
+            self._failed_points.discard(key)
+            self._pending_state.pop(key, None)
+            if key in self._position_state:
+                self._position_state[key]["label"] = "None"
+                self._position_state[key]["ts"] = now
             else:
-                self._position_state[p] = {"label": "None", "group_id": 1, "ts": now}
+                self._position_state[key] = {"label": "None", "group_id": group_id, "ts": now}
         blocked_list = [k for k, v in self._position_state.items() if v.get("label") == "block"]
         logger.info(f"🔓 [UNBLOCK] Đã mở khóa ô: {points} | Các ô đang block còn lại: {blocked_list}")
 
     async def active_request(self, data):
         key = str(data.get("end"))
         
-        file_name = self.mapping.get(key)
+        group_id = data.get("group_id")
+        file_name = f"{group_id}_config.json"
         logger.info(f"file_name: {file_name}")
-        if file_name:
-            group_id = data.get("group_id")
+        pos_cfg = self.data_configs.get(file_name, {}).get(key)
+        if pos_cfg:
             node_name = data.get("node_name")
-            new_data = self.data_configs[file_name][key]
+            new_data = pos_cfg.copy()
             new_data["group_id"] = group_id
             new_data["node_name"] = node_name
             try:
-                response = await self.execute_logic(new_data, 1)
+                response = await self.execute_logic(new_data, 1, group_id)
                 return response
             except Exception as e:
                 logger.warning(f"Error: {e}")
@@ -254,11 +250,12 @@ class Position_Manager:
     async def clear_monitor(self, data):
         key = data.get("position")
 
-        file_name = self.mapping.get(key)
-        if file_name:
+        group_id = data.get("position_group")
+        pos_cfg = self.data_configs.get(f"{group_id}_config.json", {}).get(key)
+        if pos_cfg:
             try:
-                data["logic_path"] = self.data_configs[file_name][key]["logic_path"]
-                await self.execute_logic(data, 2)
+                data["logic_path"] = pos_cfg["logic_path"]
+                await self.execute_logic(data, 2, group_id)
             except Exception as e:
                 logger.warning(f"Error: {e}")
 

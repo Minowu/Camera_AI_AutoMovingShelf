@@ -24,7 +24,7 @@ MAX_RETRIES = 3
 RCS_HEADERS = {"Accept-Language": "en-US"}
 
 
-async def process_auto(data: dict) -> None:
+async def process_auto(data: dict, group_id) -> None:
     """
     Kịch bản tự động chuyển đơn 2 điểm A -> B cho Honda Hà Nam.
     Được POS_manager gọi khi ô nguồn A có 'hang' đủ time_recognition.
@@ -36,7 +36,7 @@ async def process_auto(data: dict) -> None:
     source, dest = matching[0], matching[1]
 
     # 1. Kiểm tra ô đích có đang trống hay không
-    states = await pos_manager.get_state([dest])
+    states = await pos_manager.get_state([dest], group_id)
     if not states or states[0] != "trong":
         return
 
@@ -57,7 +57,7 @@ async def process_auto(data: dict) -> None:
     }
 
     # 4. Ghi tracking, gửi sang RCS và khóa cả 2 điểm
-    await task_service.track_for_task(order_id, {"position": [source, dest]})
+    await task_service.track_for_task(order_id, {"position": [source, dest], "position_group": group_id})
 
     logger.info(f"📤 [auto_logic] Gửi lệnh RCS: {ics_url}/ics/taskOrder/addTask | Payload: {json.dumps(payload)}")
     res_json = None
@@ -82,7 +82,7 @@ async def process_auto(data: dict) -> None:
     if res_json is None:
         logger.error(f"❌ [auto_logic] Gọi RCS thất bại cho {source} -> {dest}: {last_error}. Rollback tracking.")
         task_service.tracking_task.pop(order_id, None)
-        await pos_manager.mark_failed(source)
+        await pos_manager.mark_failed(source, group_id)
         return
 
     logger.info(f"📥 [auto_logic] RCS phản hồi: {res_json}")
@@ -93,9 +93,9 @@ async def process_auto(data: dict) -> None:
             f"code={res_json.get('code')} desc={res_json.get('desc')} | body={res_json}"
         )
         task_service.tracking_task.pop(order_id, None)
-        await pos_manager.mark_failed(source)
+        await pos_manager.mark_failed(source, group_id)
         return
 
     # RCS nhận lệnh thành công -> Khóa cả ô lấy và ô trả hàng
-    await pos_manager.block_point([source, dest])
+    await pos_manager.block_point([source, dest], group_id)
     logger.info(f"[auto_logic] Đã điều xe {source} -> {dest} (Order: {order_id}, Code: {model_code})")

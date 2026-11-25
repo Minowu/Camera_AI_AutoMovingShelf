@@ -24,7 +24,7 @@ MAX_RETRIES = 3
 RCS_HEADERS = {"Accept-Language": "en-US"}
 
 
-async def process_auto(data: dict) -> None:
+async def process_auto(data: dict, group_id) -> None:
     """
     Kịch bản tự động trả kệ rỗng / xả vỏ cho Honda Hà Nam.
     Được POS_manager gọi khi ô nguồn A có 'hang' (hoặc vỏ) đủ time_recognition.
@@ -55,7 +55,7 @@ async def process_auto(data: dict) -> None:
 
     # 3. Ghi tracking và gửi sang RCS (CHỈ KHÓA Ô NGUỒN)
     # Ghi tracking chỉ riêng điểm source
-    await task_service.track_for_task(order_id, {"position": source})
+    await task_service.track_for_task(order_id, {"position": source, "position_group": group_id})
 
     logger.info(f"📤 [empty_one_place] Gửi lệnh RCS: {ics_url}/ics/taskOrder/addTask | Payload: {json.dumps(payload)}")
     res_json = None
@@ -80,7 +80,7 @@ async def process_auto(data: dict) -> None:
     if res_json is None:
         logger.error(f"❌ [empty_one_place] Gọi RCS thất bại cho ô {source}: {last_error}. Rollback tracking.")
         task_service.tracking_task.pop(order_id, None)
-        await pos_manager.mark_failed(source)
+        await pos_manager.mark_failed(source, group_id)
         return
 
     logger.info(f"📥 [empty_one_place] RCS phản hồi: {res_json}")
@@ -91,11 +91,11 @@ async def process_auto(data: dict) -> None:
             f"code={res_json.get('code')} desc={res_json.get('desc')} | body={res_json}"
         )
         task_service.tracking_task.pop(order_id, None)
-        await pos_manager.mark_failed(source)
+        await pos_manager.mark_failed(source, group_id)
         return
 
     # RCS nhận lệnh thành công -> CHỈ KHÓA Ô NGUỒN, KHÔNG KHÓA Ô ĐÍCH (bãi chung)
-    await pos_manager.block_point(source)
+    await pos_manager.block_point(source, group_id)
     logger.info(
         f"[empty_one_place] Đã điều xe trả vỏ {source} -> {dest} "
         f"(Order: {order_id}, Code: {model_code})"

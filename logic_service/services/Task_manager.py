@@ -33,14 +33,16 @@ class TaskService:
 
         if order_id in self.tracking_task:
             first_str = order_id[0]
+            tracked = self.tracking_task[order_id]
+            group = tracked.get("position_group")
 
             if task_data["status"] in (21, 3) and first_str == "4":
-                await pos_manager.un_block_point(self.tracking_task[order_id]["position"])
+                await pos_manager.un_block_point(tracked["position"], group)
                 self.tracking_task.pop(order_id, None)
 
             # Đơn Single chuyển 2 điểm của Hà Nam (prefix S-): Mở khóa cùng lúc cả 2 điểm khi xong (3) hoặc hủy (4, 5)
             if task_data["status"] in (3, 7, 8) and first_str in("S") :
-                await pos_manager.un_block_point(self.tracking_task[order_id]["position"])
+                await pos_manager.un_block_point(tracked["position"], group)
                 self.tracking_task.pop(order_id, None)
 
             # Đơn trả kệ rỗng (X-) và Đơn 1 nguồn nhiều đích (O-) của Hà Nam:
@@ -52,16 +54,14 @@ class TaskService:
                     positions = self.tracking_task.pop(order_id)["position"]
                     logger.info(f"⏳ [DELAY UNBLOCK] Đơn {order_id} đợi 30s trước khi mở khóa ô: {positions}")
                     await asyncio.sleep(30)
-                    await pos_manager.un_block_point(positions)
+                    await pos_manager.un_block_point(positions, group)
 
             if task_data["status"] in (23, 3) and first_str == "2":
-                await pos_manager.un_block_point(self.tracking_task[order_id]["position"])
+                await pos_manager.un_block_point(tracked["position"], group)
                 self.tracking_task.pop(order_id, None)
 
             if task_data["status"] in (20, 3) and first_str == "3":
-                data = self.tracking_task[order_id]
-                data["order_id"] = order_id
-                await pos_manager.clear_monitor(data)
+                await pos_manager.clear_monitor({**tracked, "order_id": order_id})
 
 
 task_service = TaskService()

@@ -4,7 +4,7 @@ Module kịch bản điều khiển tự động 1 nguồn nhiều đích dự p
 Nguyên tắc:
 1. Đọc process_code động từ file config JSON (ví dụ SingleGroupAF).
 2. matching[0] là ô nguồn; matching[1:] là danh sách ô đích theo thứ tự xoay vòng.
-3. Gửi toàn bộ mảng ứng viên sang pos_manager.get_state(candidates) để quét RAM 1 lần cực nhanh.
+3. Gửi toàn bộ mảng ứng viên sang pos_manager.get_state(candidates, group_id) để quét RAM 1 lần cực nhanh.
 4. Cơ chế Xoay Vòng (Round-Robin): Lần 1 cấp ô 1, lần 2 cấp ô 2, lần 3 cấp ô 3... Nếu ô đến lượt bận thì tự động nhảy sang ô trống tiếp theo trong vòng tròn.
 5. Chỉ khóa đúng ô nguồn (source) để chống spam, tuyệt đối KHÔNG khóa ô đích (dest).
 6. Sinh Order ID tiền tố O- để Task_manager mở khóa ngay khi robot bốc hàng xong (subTaskSeq=2, subTaskStatus=2).
@@ -29,7 +29,7 @@ RCS_HEADERS = {"Accept-Language": "en-US"}
 _last_dest_index = {}
 
 
-async def process_auto(data: dict) -> None:
+async def process_auto(data: dict, group_id) -> None:
     """
     Kịch bản tự động chuyển hàng 1 nguồn -> xoay vòng các đích dự phòng (Honda Hà Nam).
     Được POS_manager gọi khi ô nguồn A có 'hang' đủ time_recognition.
@@ -43,7 +43,7 @@ async def process_auto(data: dict) -> None:
     n = len(candidates)
 
     # 1. Quét RAM đồng thời trạng thái của toàn bộ danh sách ô đích (cực nhanh)
-    states = await pos_manager.get_state(candidates)
+    states = await pos_manager.get_state(candidates, group_id)
     if not states:
         return
 
@@ -82,7 +82,7 @@ async def process_auto(data: dict) -> None:
 
     # 5. Ghi tracking và gửi sang RCS (CHỈ KHÓA Ô NGUỒN)
     # Ghi tracking chỉ riêng điểm source
-    await task_service.track_for_task(order_id, {"position": source})
+    await task_service.track_for_task(order_id, {"position": source, "position_group": group_id})
 
     logger.info(f"📤 [one-to-many] Gửi lệnh RCS: {ics_url}/ics/taskOrder/addTask | Payload: {json.dumps(payload)}")
     res_json = None
@@ -107,7 +107,7 @@ async def process_auto(data: dict) -> None:
     if res_json is None:
         logger.error(f"❌ [one-to-many] Gọi RCS thất bại cho {source} -> {selected_dest}: {last_error}. Rollback tracking.")
         task_service.tracking_task.pop(order_id, None)
-        await pos_manager.mark_failed(source)
+        await pos_manager.mark_failed(source, group_id)
         return
 
     logger.info(f"📥 [one-to-many] RCS phản hồi: {res_json}")
@@ -118,11 +118,11 @@ async def process_auto(data: dict) -> None:
             f"code={res_json.get('code')} desc={res_json.get('desc')} | body={res_json}"
         )
         task_service.tracking_task.pop(order_id, None)
-        await pos_manager.mark_failed(source)
+        await pos_manager.mark_failed(source, group_id)
         return
 
     # RCS nhận lệnh thành công -> CHỈ KHÓA Ô NGUỒN, KHÔNG KHÓA Ô ĐÍCH
-    await pos_manager.block_point(source)
+    await pos_manager.block_point(source, group_id)
 
     # CẬP NHẬT CON TRỎ XOAY VÒNG SANG Ô KẾ TIẾP CHO LẦN SAU
     _last_dest_index[source] = (selected_idx + 1) % n

@@ -33,7 +33,7 @@ def extract_points(payload: Any) -> List[str]:
                 return [str(p).strip() for p in pts if p is not None and str(p).strip()]
             return [str(pts).strip()] if str(pts).strip() else []
         # Trường hợp dict là dạng {pos_id: ...} (bỏ qua các key cờ điều khiển như clear_task)
-        return [str(k).strip() for k in payload.keys() if k not in ("clear_task",) and str(k).strip()]
+        return [str(k).strip() for k in payload.keys() if k not in ("clear_task", "group_id") and str(k).strip()]
     elif isinstance(payload, (str, int)):
         val = str(payload).strip()
         return [val] if val else []
@@ -47,7 +47,8 @@ async def block_point(payload: Any = Body(...)):
         pts = extract_points(payload)
         if not pts:
             raise HTTPException(status_code=400, detail="Không tìm thấy danh sách điểm cần block")
-        await pos_manager.block_point(pts)
+        group = payload.get("group_id") if isinstance(payload, dict) else None
+        await pos_manager.block_point(pts, group)
         return {
             "status": "success",
             "message": f"Đã khóa thành công {len(pts)} điểm",
@@ -67,7 +68,8 @@ async def unblock_point(payload: Any = Body(...)):
         pts = extract_points(payload)
         if not pts:
             raise HTTPException(status_code=400, detail="Không tìm thấy danh sách điểm cần mở khóa")
-        await pos_manager.un_block_point(pts)
+        group = payload.get("group_id") if isinstance(payload, dict) else None
+        await pos_manager.un_block_point(pts, group)
 
         # Mặc định gỡ đơn kẹt trong tracking_task nếu có chứa ô được mở khóa thủ công
         clear_task = True
@@ -80,7 +82,7 @@ async def unblock_point(payload: Any = Body(...)):
                 pos = tdata.get("position")
                 t_positions = pos if isinstance(pos, list) else [pos]
                 t_positions_str = [str(p).strip() for p in t_positions if p is not None]
-                if any(p in t_positions_str for p in pts):
+                if tdata.get("position_group") == group and any(p in t_positions_str for p in pts):
                     task_service.tracking_task.pop(oid, None)
                     cleared_orders.append(oid)
                     logger.info(f"🧹 [MANUAL UNBLOCK] Gỡ đơn kẹt {oid} khỏi tracking_task do mở khóa ô {pts}")
@@ -209,6 +211,9 @@ async def get_positions():
     # Lập bản đồ pos_id -> active order_id trong tracking_task
     pos_to_order = {}
     for oid, tdata in task_service.tracking_task.items():
+        # chỉ đưa Hà Nam vào thống kê, bỏ qua các đơn tracking_task của các dự án khác
+        if tdata.get("position_group") != "HaNam":
+            continue
         pos = tdata.get("position")
         t_positions = pos if isinstance(pos, list) else [pos]
         for p in t_positions:
@@ -216,11 +221,13 @@ async def get_positions():
                 pos_to_order[str(p).strip()] = oid
 
     for pos_id_str, item in catalog.items():
-        confirmed_info = pos_manager._position_state.get(pos_id_str, {})
+          # chỉ đưa Hà Nam vào thống kê, bỏ qua các đơn tracking_task của các dự án khác
+        key = ("HaNam", pos_id_str)
+        confirmed_info = pos_manager._position_state.get(key, {})
         confirmed_label = confirmed_info.get("label", "chua_xac_nhan")
         is_blocked = (confirmed_label == "block")
-        is_failed = (pos_id_str in pos_manager._failed_points)
-        is_dispatching = (pos_id_str in pos_manager._dispatching)
+        is_failed = (key in pos_manager._failed_points)
+        is_dispatching = (key in pos_manager._dispatching)
 
         if confirmed_label == "hang":
             hang_count += 1
@@ -231,7 +238,7 @@ async def get_positions():
         if is_failed:
             failed_count += 1
 
-        pending_info = pos_manager._pending_state.get(pos_id_str)
+        pending_info = pos_manager._pending_state.get(key)
         pending_label = pending_info.get("label") if pending_info else None
         pending_elapsed = round(now - pending_info.get("start_ts", now), 1) if pending_info else 0
 
@@ -634,7 +641,7 @@ async def serve_control_ui():
         const res = await fetch('/block_point', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(id)
+          body: JSON.stringify({point: id, group_id: 'HaNam'})
         });
         if (res.ok) {
           showToast(`Đã Block ${id}`);
@@ -648,7 +655,7 @@ async def serve_control_ui():
         const res = await fetch('/unblock_point', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({points: [id], clear_task: true})
+          body: JSON.stringify({points: [id], clear_task: true, group_id: 'HaNam'})
         });
         if (res.ok) {
           showToast(`Đã Mở ${id}`);
@@ -665,7 +672,7 @@ async def serve_control_ui():
         await fetch('/unblock_point', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({points: ids, clear_task: true})
+          body: JSON.stringify({points: ids, clear_task: true, group_id: 'HaNam'})
         });
         showToast(`Đã mở ${ids.length} ô`);
         fetchData();
