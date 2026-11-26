@@ -174,6 +174,12 @@ def get_hanam_positions_catalog() -> Dict[str, Dict[str, Any]]:
     return catalog
 
 
+@router.post("/api/auto-dispatch")
+async def set_auto_dispatch(enabled: bool = Body(..., embed=True)):
+    pos_manager.dispatch_enabled = enabled
+    return {"dispatch_enabled": enabled}
+
+
 @router.get("/api/positions")
 async def get_positions():
     """API trả về trạng thái thời gian thực của toàn bộ 205 ô Hà Nam kèm phân khu UI."""
@@ -279,6 +285,7 @@ async def get_positions():
     positions_list.sort(key=lambda x: (0 if x["is_source"] else 1, x["pos_id"]))
 
     return {
+        "dispatch_enabled": pos_manager.dispatch_enabled,
         "summary": {
             "total": len(positions_list),
             "hang": hang_count,
@@ -400,6 +407,9 @@ async def serve_control_ui():
       white-space: nowrap;
     }
     .btn-unblock-all:hover { background: #dc2626; color: #fff; }
+
+    #autoDispatchButton[aria-pressed="true"] { background: #166534; }
+    #autoDispatchButton:disabled { opacity: .55; cursor: default; }
 
     /* Zone Section Container */
     #zonesContainer {
@@ -600,6 +610,8 @@ async def serve_control_ui():
 
     <div class="search-box">
       <input type="text" id="searchInput" placeholder="🔍 Tìm mã ô...">
+      <button id="autoDispatchButton" class="btn-unblock-all" aria-pressed="false"
+              onclick="toggleAutoDispatch()" disabled>Đang tải trạng thái cấp hàng</button>
       <button class="btn-unblock-all" onclick="unlockAll()">Mở hết Block/Lỗi</button>
     </div>
   </div>
@@ -615,6 +627,40 @@ async def serve_control_ui():
     let searchQuery = '';
     let isFetching = false;
     let initialFilterButtonsBuilt = false;
+    let autoDispatchEnabled;
+    let savingAutoDispatch = false;
+    let autoDispatchRevision = 0;
+
+    function showAutoDispatch(enabled) {
+      autoDispatchEnabled = enabled;
+      const button = document.getElementById('autoDispatchButton');
+      button.textContent = enabled ? 'Dừng cấp hàng tự động' : 'Bật lại cấp hàng tự động';
+      button.setAttribute('aria-pressed', String(!enabled));
+      button.disabled = savingAutoDispatch;
+    }
+
+    async function toggleAutoDispatch() {
+      if (savingAutoDispatch || autoDispatchEnabled === undefined) return;
+      savingAutoDispatch = true;
+      autoDispatchRevision++;
+      const button = document.getElementById('autoDispatchButton');
+      button.disabled = true;
+      try {
+        const res = await fetch('/api/auto-dispatch', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({enabled: !autoDispatchEnabled})
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        showAutoDispatch(data.dispatch_enabled);
+      } catch {
+        showToast('Không đổi được trạng thái cấp hàng');
+      } finally {
+        savingAutoDispatch = false;
+        button.disabled = false;
+      }
+    }
 
     function showToast(msg) {
       const t = document.getElementById('toast');
@@ -697,10 +743,14 @@ async def serve_control_ui():
     async function fetchData() {
       if (isFetching) return;
       isFetching = true;
+      const revision = autoDispatchRevision;
       try {
         const res = await fetch('/api/positions');
         if (!res.ok) return;
         const data = await res.json();
+        if (!savingAutoDispatch && revision === autoDispatchRevision) {
+          showAutoDispatch(data.dispatch_enabled);
+        }
         
         const s = data.summary || {};
         document.getElementById('sTotal').textContent = s.total || 0;

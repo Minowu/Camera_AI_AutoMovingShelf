@@ -25,6 +25,7 @@ class Position_Manager:
         self.time_recognition = time_recognition
         self._failed_points = set()
         self._dispatching = set()
+        self.dispatch_enabled = True
 
     async def start(self) -> None:
         self.load_configs()
@@ -112,7 +113,8 @@ class Position_Manager:
 
     async def request_service_auto(self, data, key):
         try:
-            await self.execute_logic(data, 0, key[0])
+            if self.dispatch_enabled:
+                await self.execute_logic(data, 0, key[0])
         except Exception as e:
             logger.warning(f"Error: {e}")
         finally:
